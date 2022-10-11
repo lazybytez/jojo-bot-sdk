@@ -1,0 +1,40 @@
+# Automatically creates pull request for sdk branches
+name: Auto-PR
+
+on:
+  push:
+    branches:
+      - "sdk/**"
+
+jobs:
+  create_pr:
+    name: Create PR
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Extract branch name
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
+      - name: Extract ticket name
+        shell: bash
+        run: echo "##[set-output name=ticket;]$(echo ${BRANCH_NAME#*/})"
+        id: extract_ticket
+        env:
+          BRANCH_NAME: ${{ steps.extract_branch.outputs.branch }}
+      - name: 'Try "pr list", and "create" if needed'
+        run: |
+          if [ $(gh pr list --head "${{ steps.extract_branch.outputs.branch }}" | wc -l) -gt 0 ]; then
+            echo "PR for branch ${{ steps.extract_branch.outputs.branch }} already exists!"
+          else
+            gh pr create \
+              --head "${{ steps.extract_branch.outputs.branch }}" \
+              --base main \
+              --title "$(echo '${{ github.event.head_commit.message }}' | head -1)" \
+              --body "${{ steps.extract_ticket.outputs.ticket }}" \
+              --repo $GITHUB_REPOSITORY
+          fi
